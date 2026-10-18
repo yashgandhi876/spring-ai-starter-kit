@@ -1,9 +1,11 @@
 package dev.starterkit.ai.chat;
 
 import dev.starterkit.ai.config.StarterKitProperties;
+import dev.starterkit.ai.web.ApiExceptionHandler;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,10 +53,20 @@ public class ChatController {
     /**
      * Streams the answer as Server-Sent Events. Each event's data is JSON like {"text":" world"}:
      * plain-text events would lose leading spaces and break on newlines in standard SSE clients.
+     *
+     * <p>If the provider fails before the first token, the client gets a normal problem response with
+     * its status code. After that the 200 has already been sent, so the problem (title, detail, status)
+     * arrives as the last event instead of the stream just stopping.
      */
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ChatToken> stream(@Valid @RequestBody ChatRequest request) {
-        return chatService.stream(request.message()).map(ChatToken::new);
+    public Flux<Object> stream(@Valid @RequestBody ChatRequest request) {
+        AtomicBoolean started = new AtomicBoolean();
+        return chatService.stream(request.message())
+                .<Object>map(ChatToken::new)
+                .doOnNext(token -> started.set(true))
+                .onErrorResume(ex -> started.get()
+                        ? Flux.just(ApiExceptionHandler.streamProblem(ex))
+                        : Flux.error(ex));
     }
 
     @GetMapping("/info")

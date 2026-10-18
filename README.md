@@ -63,8 +63,8 @@ export OPENAI_API_KEY=sk-...
 ```
 
 If the provider's key is not set, the app stops at startup and names the variable to export.
-If chat answers `502 AI request failed`, the provider rejected the request (for example an invalid
-or revoked key, or an unknown model); the reason is in the server log, never in the response.
+If chat answers `502`, the provider refused the request (an invalid key, an unknown model, no credits);
+`503 AI provider busy` means try again shortly. The provider's own message is in the server log, never in the response.
 
 Anthropic has no embeddings API, so RAG keeps using Ollama embeddings unless you set
 `EMBEDDING_PROVIDER=openai` and `EMBEDDING_DIMENSIONS=1536`.
@@ -130,6 +130,8 @@ curl -s localhost:8080/api/ask -H 'Content-Type: application/json' -d '{"questio
 ```
 
 Streamed tokens are wrapped in JSON so spaces and line breaks survive in every SSE client.
+If the provider fails before the first token you get a normal error response; if it fails midway,
+the last event is the problem itself (`data:{"title":...,"detail":...,"status":503}`).
 
 Errors come back as `application/problem+json` with a `title` and a `detail` you can show to users.
 
@@ -140,8 +142,8 @@ Errors come back as `application/problem+json` with a `title` and a `detail` you
 | 415 | File type other than PDF, Markdown or text |
 | 422 | Document has no extractable text (for example a scanned PDF) |
 | 500 | Unexpected server error; details are in the server log only |
-| 502 | The AI provider failed (bad key, unknown model, provider down); details are in the server log only |
-| 503 | The database can't be reached |
+| 502 | The AI provider refused the request: title `AI provider rejected the API key` for a bad key, `AI request failed` for anything else (unknown model, no credits); details are in the server log only |
+| 503 | Temporary: `AI provider busy` (rate limited, overloaded, down or timed out; try again) or `Database unavailable` |
 
 ## Project layout
 

@@ -1,5 +1,6 @@
 package dev.starterkit.ai.chat;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -17,6 +18,7 @@ import dev.starterkit.ai.config.StarterKitProperties;
 import dev.starterkit.ai.web.ApiExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -116,6 +118,58 @@ class ChatControllerTest {
                 // leading spaces and newlines survive inside the JSON payload
                 .andExpect(content().string(containsString("data:{\"text\":\" there\"}")))
                 .andExpect(content().string(containsString("data:{\"text\":\"\\nnext line\"}")));
+    }
+
+    @Test
+    void reportsBusyProviderAsServiceUnavailable() throws Exception {
+        when(chatService.chat(anyString())).thenThrow(new TransientAiException("529 overloaded_error"));
+
+        mvc.perform(post("/api/chat").contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"Hello\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.title").value("AI provider busy"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("overloaded_error"))));
+    }
+
+    @Test
+    void streamFailingBeforeTheFirstTokenGetsANormalProblemResponse() throws Exception {
+        when(chatService.stream("Hello")).thenReturn(Flux.error(new TransientAiException("529 overloaded_error")));
+
+        MvcResult started = mvc.perform(post("/api/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .content("{\"message\":\"Hello\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mvc.perform(asyncDispatch(started))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().string(containsString("AI provider busy")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("overloaded_error"))));
+    }
+
+    @Test
+    void streamFailingMidwaySendsTheProblemAsTheLastEvent() throws Exception {
+        when(chatService.stream("Hello")).thenReturn(Flux.concat(
+                Flux.just("Partial", " answer"),
+                Flux.error(new TransientAiException("529 overloaded_error"))));
+
+        MvcResult started = mvc.perform(post("/api/chat/stream")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .content("{\"message\":\"Hello\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        String body = mvc.perform(asyncDispatch(started))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("data:{\"text\":\"Partial\"}", "data:{\"text\":\" answer\"}");
+        // It must be a real SSE event: SSE clients drop a problem appended as bare JSON
+        String[] events = body.strip().split("\n\n");
+        String last = events[events.length - 1];
+        assertThat(last).startsWith("data:{").contains("\"title\":\"AI provider busy\"", "\"status\":503", "try again")
+                .doesNotContain("overloaded_error");
     }
 
     @Test

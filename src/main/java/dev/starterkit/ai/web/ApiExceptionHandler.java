@@ -59,9 +59,41 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler({NonTransientAiException.class, TransientAiException.class})
     ProblemDetail aiProvider(RuntimeException ex) {
-        log.error("AI provider call failed", ex);
-        return problem(HttpStatus.BAD_GATEWAY, "AI request failed",
-                "The AI provider could not complete the request. Check the API key, model name and provider status.");
+        return providerProblem(ex);
+    }
+
+    /** The problem to show for a failed AI provider call, logged in full on the server only. */
+    static ProblemDetail providerProblem(Throwable ex) {
+        return switch (ProviderErrors.classify(ex)) {
+            case BUSY -> {
+                log.warn("AI provider busy or unavailable: {}", ex.toString());
+                yield problem(HttpStatus.SERVICE_UNAVAILABLE, "AI provider busy",
+                        "The AI provider is busy or temporarily unavailable. Please try again in a moment.");
+            }
+            case KEY_REJECTED -> {
+                log.error("AI provider rejected the API key", ex);
+                yield problem(HttpStatus.BAD_GATEWAY, "AI provider rejected the API key",
+                        "The AI provider did not accept the API key. Check the key for the selected provider.");
+            }
+            case FAILED -> {
+                log.error("AI provider call failed", ex);
+                yield problem(HttpStatus.BAD_GATEWAY, "AI request failed",
+                        "The AI provider could not complete the request. Check the model name, the account and the provider status.");
+            }
+        };
+    }
+
+    /**
+     * The problem to send inside a stream that has already started, where the status code can no
+     * longer change. Unexpected failures are logged here, since no exception handler will see them.
+     */
+    public static ProblemDetail streamProblem(Throwable ex) {
+        if (looksLikeProviderError(ex)) {
+            return providerProblem(ex);
+        }
+        log.error("Stream failed", ex);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error",
+                "Something went wrong on the server. Check the server logs for details.");
     }
 
     @ExceptionHandler(DataAccessException.class)
