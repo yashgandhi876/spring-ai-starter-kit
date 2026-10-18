@@ -20,6 +20,21 @@ and switch between Claude, OpenAI and a free local model by changing one setting
 - **Production basics**: input validation, RFC 9457 error responses that never leak provider errors or keys,
   health probes, graceful shutdown, a non-root Docker image and GitHub Actions CI
 
+## When to use it
+
+- **Internal knowledge base**: answer staff questions about HR policies, handbooks or runbooks from your own PDFs
+- **Support FAQ bot**: answer customer questions from your help docs and show which document each answer came from
+- **AI chat in an existing Spring Boot app**: copy the chat and RAG pieces into your service instead of starting from zero
+- **Private, offline assistant**: run on Ollama so your documents and questions never leave your machines
+- **Prototype or hackathon base**: build on the free local model first, then try Claude and OpenAI by changing one variable
+- **Learning Spring AI 2.0**: read a small, tested codebase that is shaped like a real service
+
+**When not to use it**
+
+- You want a no-code chatbot builder. This is a Java codebase you change and run yourself.
+- Your stack is not Java or Spring.
+- You need multi-agent workflows or tool calling. Those are not in v0.1.
+
 ## Quick start (local, no API key)
 
 Needs Java 21 (check with `java -version`) and Docker with Compose 2.24 or newer
