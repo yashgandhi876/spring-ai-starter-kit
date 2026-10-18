@@ -11,7 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.starterkit.ai.chat.ChatAnswer;
 import dev.starterkit.ai.chat.ChatService;
+import dev.starterkit.ai.chat.TokenUsage;
 import dev.starterkit.ai.config.StarterKitProperties;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -137,7 +139,7 @@ class DocumentServiceTest {
                 new Document("Refunds take five days.", Map.of(DocumentService.SOURCE_KEY, "policy.md")),
                 new Document("Refunds need a receipt.", Map.of(DocumentService.SOURCE_KEY, "policy.md")),
                 new Document("Support is open 9 to 5.", Map.of(DocumentService.SOURCE_KEY, "faq.txt"))));
-        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("Five days, with a receipt.");
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn(new ChatAnswer("Five days, with a receipt.", TokenUsage.NONE));
 
         DocumentService.Answer answer = service.ask("How long do refunds take?");
 
@@ -154,7 +156,7 @@ class DocumentServiceTest {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
                 scored("The Pro plan costs 1499 rupees per month.", "pricing.md", 0.724),
                 scored("Returns are accepted within 17 days.", "handbook.pdf", 0.382)));
-        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("1499 rupees per month.");
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn(new ChatAnswer("1499 rupees per month.", TokenUsage.NONE));
 
         DocumentService.Answer answer = service.ask("How much is the Pro plan?");
 
@@ -173,7 +175,7 @@ class DocumentServiceTest {
                 scored("Refunds take five days.", "policy.md", 0.77),
                 scored("Refund requests go to support.", "faq.txt", 0.57),
                 scored("The office has a cafe.", "office.md", 0.56)));
-        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("Five days.");
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn(new ChatAnswer("Five days.", TokenUsage.NONE));
 
         DocumentService.Answer answer = service.ask("How do refunds work?");
 
@@ -187,7 +189,7 @@ class DocumentServiceTest {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
                 scored("The Pro plan costs 1499 rupees per month.", "pricing.md", 0.724),
                 scored("Returns are accepted within 17 days.", "handbook.pdf", 0.382)));
-        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("1499 rupees per month.");
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn(new ChatAnswer("1499 rupees per month.", TokenUsage.NONE));
 
         assertThat(service.ask("How much is the Pro plan?").sources()).containsExactly("pricing.md", "handbook.pdf");
     }
@@ -204,6 +206,23 @@ class DocumentServiceTest {
 
     private static Document scored(String text, String source, double score) {
         return Document.builder().text(text).metadata(Map.of(DocumentService.SOURCE_KEY, source)).score(score).build();
+    }
+
+    @Test
+    void passesTheModelsTokenUsageThroughForCostTracking() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                new Document("Refunds take five days.", Map.of(DocumentService.SOURCE_KEY, "policy.md"))));
+        when(chatService.answerWithContext(anyString(), anyString()))
+                .thenReturn(new ChatAnswer("Five days.", new TokenUsage(120, 30)));
+
+        assertThat(service.ask("How long?").tokens()).isEqualTo(new TokenUsage(120, 30));
+    }
+
+    @Test
+    void noMatchUsesNoTokens() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+
+        assertThat(service.ask("Anything?").tokens()).isEqualTo(TokenUsage.NONE);
     }
 
     @Test

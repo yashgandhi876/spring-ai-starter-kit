@@ -17,6 +17,9 @@ and switch between Claude, OpenAI and a free local model by changing one setting
 - **Provider switching without code changes**: Ollama (local, free), Anthropic Claude or OpenAI
 - **Built-in chat page** at `http://localhost:8080`, with your own app name, welcome text and colour
 - **Everything configurable**: models, temperature, prompts, RAG tuning and branding through environment variables
+- **Optional login** with Spring Security: users and admins in Postgres, a sign-in page, HTTP Basic for API clients
+- **Usage limits and cost tracking**: daily request and token limits per user, and tokens and cost on every answer
+  and in an admin report
 - **Production basics**: input validation, RFC 9457 error responses that never leak provider errors or keys,
   health probes, graceful shutdown, a non-root Docker image and GitHub Actions CI
 
@@ -69,6 +72,32 @@ If chat answers `502`, the provider refused the request (an invalid key, an unkn
 Anthropic has no embeddings API, so RAG keeps using Ollama embeddings unless you set
 `EMBEDDING_PROVIDER=openai` and `EMBEDDING_DIMENSIONS=1536`.
 
+## Login, usage limits and cost tracking
+
+Everything here is off by default, so the quick start stays two commands.
+
+**Login.** Turn it on before you put the app where others can reach it:
+
+```bash
+export AUTH_ENABLED=true
+export ADMIN_PASSWORD='choose-a-long-password'   # 12 to 64 characters; only used to create the first admin
+./gradlew bootRun
+```
+
+The chat page now asks you to sign in. Admins add people with the API (see below). API clients sign in
+with HTTP Basic, for example `curl -u alice:password ...`. Users and hashed passwords live in Postgres;
+the tables are created by Flyway on first start, also for databases that already hold documents from v0.1.
+
+**Usage limits.** `USAGE_DAILY_REQUESTS=50` allows each person 50 AI requests (chat, stream, ask) per UTC day;
+`USAGE_DAILY_TOKENS=200000` caps their tokens. Over the limit, the API answers `429` with a `Retry-After`
+header that counts down to midnight UTC. With login on, limits apply per user; with login off, per client
+IP address (behind a reverse proxy, set `SERVER_FORWARD_HEADERS_STRATEGY=native` so the real address is used).
+
+**Cost tracking.** Every answer reports the tokens it used and what they cost, the chat page shows it under
+each answer, and admins get a daily report per user. Prices for current Claude and OpenAI models are built in
+(Ollama is free); provider prices change, so set `AI_PRICE_INPUT_PER_MTOK` and `AI_PRICE_OUTPUT_PER_MTOK`
+(US dollars per million tokens) if yours differ or you use another model. Embedding tokens are not counted.
+
 ## Configuration
 
 Every setting is an environment variable with a working default. Copy `.env.example` to `.env`
@@ -93,6 +122,11 @@ for Docker Compose, or export the variables before `./gradlew bootRun`.
 | `APP_NAME` | `Spring AI Starter Kit` | Name shown on the chat page |
 | `APP_WELCOME_MESSAGE` | a short greeting | First message on the chat page |
 | `APP_ACCENT_COLOR` | `#2f6f4f` | Button and highlight colour, as `#rrggbb` |
+| `AUTH_ENABLED` | `false` | Require sign-in for the chat page and the API |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / none | The first admin, created at startup if missing; the password is required (12 to 64 characters) when login is on |
+| `USAGE_DAILY_REQUESTS` | `0` | AI requests per user (or IP) per UTC day; `0` means no limit |
+| `USAGE_DAILY_TOKENS` | `0` | Input plus output tokens per user (or IP) per UTC day; `0` means no limit |
+| `AI_PRICE_INPUT_PER_MTOK` / `AI_PRICE_OUTPUT_PER_MTOK` | built in for known models | US dollars per million tokens, for cost tracking |
 | `DB_PORT` / `OLLAMA_PORT` | `5432` / `11434` | Host ports for the Compose Postgres and Ollama containers; the app follows them |
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | local Compose database | Postgres connection (`DB_URL` overrides `DB_PORT`) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server (overrides `OLLAMA_PORT`) |
@@ -127,6 +161,32 @@ curl -s -X DELETE localhost:8080/api/documents/handbook.pdf
 
 # Ask about your documents
 curl -s localhost:8080/api/ask -H 'Content-Type: application/json' -d '{"question":"What is the leave policy?"}'
+
+# Your usage today and the limits that apply
+curl -s localhost:8080/api/usage/me
+```
+
+Answers include what they used: `"usage":{"inputTokens":312,"outputTokens":58,"costUsd":0.0012}`.
+A stream ends with a `data:{"usage":{...}}` event.
+
+With login on, add `-u user:password` to every call. These need login on:
+
+```bash
+# Who am I (works without login too, and says whether login is on)
+curl -s -u alice:password localhost:8080/api/me
+
+# Change your own password
+curl -s -u alice:password localhost:8080/api/me/password -H 'Content-Type: application/json' \
+  -d '{"currentPassword":"old password here","newPassword":"new password here"}'
+
+# Admins: list, add and remove users (role USER or ADMIN)
+curl -s -u admin:password localhost:8080/api/admin/users
+curl -s -u admin:password localhost:8080/api/admin/users -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"a long password","role":"USER"}'
+curl -s -u admin:password -X DELETE localhost:8080/api/admin/users/alice
+
+# Admins: tokens and cost per user per day, with totals (days: 1 to 366, default 30)
+curl -s -u admin:password 'localhost:8080/api/admin/usage?days=7'
 ```
 
 Streamed tokens are wrapped in JSON so spaces and line breaks survive in every SSE client.
@@ -138,9 +198,13 @@ Errors come back as `application/problem+json` with a `title` and a `detail` you
 | Status | When |
 | --- | --- |
 | 400 | Blank or too-long message or question, malformed JSON, empty, missing or non-multipart upload |
+| 401 | Login is on and you are not signed in, or the username or password is wrong |
+| 403 | Signed in, but an admin-only call, or the page's CSRF token is missing |
+| 409 | A user with that name already exists |
 | 413 | File larger than `MAX_UPLOAD_SIZE` |
 | 415 | File type other than PDF, Markdown or text |
 | 422 | Document has no extractable text (for example a scanned PDF) |
+| 429 | `Daily limit reached`; `Retry-After` says how many seconds until midnight UTC |
 | 500 | Unexpected server error; details are in the server log only |
 | 502 | The AI provider refused the request: title `AI provider rejected the API key` for a bad key, `AI request failed` for anything else (unknown model, no credits); details are in the server log only |
 | 503 | Temporary: `AI provider busy` (rate limited, overloaded, down or timed out; try again) or `Database unavailable` |
@@ -152,10 +216,13 @@ src/main/java/dev/starterkit/ai/
   chat/     chat API, streaming, provider-independent ChatService
   rag/      document upload, chunking, vector search, cited answers
   config/   StarterKitProperties: every customer setting, validated at startup
+  security/ login, users, admin user API
+  usage/    daily limits, token and cost tracking, usage report
   web/      error handling
 src/main/resources/
   application.yml       all settings and their environment variables
-  static/index.html     the chat page
+  db/migration/         Flyway migrations for the app's own tables
+  static/index.html     the chat page (login.html when login is on)
 ```
 
 ## Running the tests
@@ -165,14 +232,13 @@ src/main/resources/
 node --test 'src/test/js/*.test.mjs'   # the chat page's Markdown renderer; needs Node 22+
 ```
 
-The tests need no API keys, network or Docker.
+The tests need no API keys or Docker. Database tests run on a real Postgres that Gradle downloads
+once as a regular dependency and starts in-process.
 
 ## Roadmap
 
-- Spring Security login and per-user usage limits
 - Tool-calling agents and an MCP server
 - Guardrails (PII masking) and an evaluation test suite
-- Token and cost tracking per user
 
 Ideas and bug reports are welcome in Issues.
 

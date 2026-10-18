@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4f'/%3E%3Cpath d='M9 21c2-6 6-10 14-11-1 8-5 12-11 14' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1d1d1b; --quiet:#6b6b66; --line:#e2e2dc; --accent:#2f6f4f; --error:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161615; --panel:#1f1f1d; --ink:#ededea; --quiet:#a3a39c; --line:#33332f; --accent:#6fbf94; --error:#f2b8b5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--ink);
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
+  form { width:100%; max-width:360px; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+         padding:24px; display:flex; flex-direction:column; gap:12px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  label { font-size:14px; color:var(--quiet); display:flex; flex-direction:column; gap:4px; }
+  input { padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  #message { min-height:1.5em; font-size:14px; color:var(--error); margin:0; }
+  #message.info { color:var(--quiet); }
+</style>
+</head>
+<body>
+<form id="form">
+  <h1 id="appName">Sign in</h1>
+  <label>Username <input id="username" name="username" autocomplete="username" required maxlength="50"></label>
+  <label>Password <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="64"></label>
+  <button id="submit" type="submit">Sign in</button>
+  <p id="message" role="status"></p>
+</form>
+<script>
+  const message = document.getElementById('message');
+
+  // The sign-in page is public, but /api/info is not, so the app name is only known after sign-in
+  function csrfHeaders(headers = {}) {
+    const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? { ...headers, 'X-XSRF-TOKEN': decodeURIComponent(m[1]) } : headers;
+  }
+
+  // Loading the page sets the XSRF-TOKEN cookie; make sure it exists before the first submit
+  async function ensureCsrfCookie() {
+    if (!/(?:^|;\s*)XSRF-TOKEN=/.test(document.cookie)) await fetch('/login.html', { cache: 'no-store' });
+  }
+
+  document.getElementById('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const button = document.getElementById('submit');
+    button.disabled = true;
+    message.className = 'info';
+    message.textContent = 'Signing in…';
+    try {
+      await ensureCsrfCookie();
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: csrfHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+        body: new URLSearchParams({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+      if (res.status === 204) {
+        location.href = '/';
+        return;
+      }
+      message.className = '';
+      message.textContent = res.status === 401 ? 'Wrong username or password.' : 'Sign-in failed (HTTP ' + res.status + '). Reload and try again.';
+    } catch (err) {
+      message.className = '';
+      message.textContent = 'Could not reach the server.';
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
