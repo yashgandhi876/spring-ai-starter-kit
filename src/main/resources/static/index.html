@@ -176,6 +176,8 @@
       s.className = 'sources';
       s.textContent = 'Sources: ' + a.sources.join(', ');
       target.appendChild(s);
+      // Scroll again: the sources line was added after showAnswer scrolled, and would stay hidden below
+      log.scrollTop = log.scrollHeight;
     }
   }
 
