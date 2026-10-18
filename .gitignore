@@ -9,3 +9,4 @@ out/
 .env
 build.log
 build.command
+CLAUDE.md
