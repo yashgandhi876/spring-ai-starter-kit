@@ -32,6 +32,21 @@
   .upload { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:14px; }
   .upload input[type=file] { max-width:100%; }
   .msg { overflow-wrap:anywhere; }
+  .md { white-space:normal; }
+  .md > :first-child { margin-top:0; }
+  .md > :last-child { margin-bottom:0; }
+  .md p, .md ul, .md ol, .md pre, .md blockquote { margin:0 0 .6em; }
+  .md ul, .md ol { padding-left:1.4em; }
+  .md h3, .md h4, .md h5 { margin:.8em 0 .4em; font-size:1em; }
+  .md h3 { font-size:1.1em; }
+  .md code { font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--bg); padding:1px 4px; border-radius:4px; }
+  .md pre { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px 12px; overflow-x:auto; }
+  .md pre code { background:none; padding:0; white-space:pre; }
+  .md blockquote { border-left:3px solid var(--line); padding-left:10px; color:var(--quiet); }
+  .md hr { border:0; border-top:1px solid var(--line); }
+  .md a { color:var(--accent); }
+  .error { color:#b3261e; margin-top:6px; white-space:pre-wrap; }
+  @media (prefers-color-scheme: dark) { .error { color:#f2b8b5; } }
   .hidden { display:none; }
 </style>
 </head>
@@ -60,6 +75,7 @@
     </form>
   </section>
 </main>
+<script src="markdown.js"></script>
 <script>
   const log = document.getElementById('log');
   const input = document.getElementById('input');
@@ -100,6 +116,13 @@
     return d;
   }
 
+  // Model answers are Markdown. Markdown.renderMarkdown builds DOM nodes and never parses HTML.
+  function showAnswer(target, text) {
+    target.classList.add('md');
+    Markdown.renderMarkdown(target, text);
+    log.scrollTop = log.scrollHeight;
+  }
+
   async function streamChat(message, target) {
     const res = await fetch('/api/chat/stream', {
       method: 'POST',
@@ -110,22 +133,32 @@
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let end;
-      while ((end = buffer.indexOf('\n\n')) >= 0) {
-        const event = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
-        const data = event.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5)).join('\n').trim();
-        if (!data) continue;
-        let token;
-        try { token = JSON.parse(data); } catch (_) { continue; }
-        if (token.detail || token.title) throw new Error(token.detail || token.title);
-        target.textContent += token.text || '';
-        log.scrollTop = log.scrollHeight;
+    let answer = '';
+    let frame = 0;
+    const render = () => { frame = 0; showAnswer(target, answer); };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let end;
+        while ((end = buffer.indexOf('\n\n')) >= 0) {
+          const event = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const data = event.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5)).join('\n').trim();
+          if (!data) continue;
+          let token;
+          try { token = JSON.parse(data); } catch (_) { continue; }
+          if (token.detail || token.title) throw new Error(token.detail || token.title);
+          answer += token.text || '';
+          // Re-render at most once per frame; long answers arrive as hundreds of tokens.
+          if (!frame) frame = requestAnimationFrame(render);
+        }
       }
+    } finally {
+      // Show everything received so far before any error message is appended below it
+      cancelAnimationFrame(frame);
+      if (answer) render();
     }
   }
 
@@ -137,7 +170,7 @@
     });
     if (!res.ok) throw new Error(await errorMessage(res));
     const a = await res.json();
-    target.textContent = a.answer;
+    showAnswer(target, a.answer);
     if (a.sources && a.sources.length) {
       const s = document.createElement('div');
       s.className = 'sources';
@@ -157,7 +190,11 @@
     try {
       if (mode === 'chat') await streamChat(text, bot); else await askDocs(text, bot);
     } catch (err) {
-      bot.textContent = (bot.textContent ? bot.textContent + '\n\n' : '') + 'Something went wrong: ' + err.message;
+      const e = document.createElement('div');
+      e.className = 'error';
+      e.textContent = 'Something went wrong: ' + err.message;
+      bot.appendChild(e);
+      log.scrollTop = log.scrollHeight;
     } finally {
       send.disabled = false;
       input.focus();

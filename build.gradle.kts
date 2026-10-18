@@ -40,6 +40,11 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-pdf-document-reader")
     runtimeOnly("org.postgresql:postgresql")
 
+    // Native macOS DNS resolver for Netty (used by the streaming HTTP client). Without it, startup on a Mac
+    // logs a scary-looking ERROR and falls back to default DNS servers. Ignored on other systems.
+    runtimeOnly("io.netty:netty-resolver-dns-native-macos::osx-aarch_64")
+    runtimeOnly("io.netty:netty-resolver-dns-native-macos::osx-x86_64")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

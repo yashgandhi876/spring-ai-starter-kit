@@ -149,6 +149,64 @@ class DocumentServiceTest {
     }
 
     @Test
+    void dropsDocumentsScoringFarBelowTheBestMatch() {
+        // Real nomic-embed-text scores for "How much is the Pro plan?" against two uploaded documents
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                scored("The Pro plan costs 1499 rupees per month.", "pricing.md", 0.724),
+                scored("Returns are accepted within 17 days.", "handbook.pdf", 0.382)));
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("1499 rupees per month.");
+
+        DocumentService.Answer answer = service.ask("How much is the Pro plan?");
+
+        ArgumentCaptor<String> context = ArgumentCaptor.forClass(String.class);
+        verify(chatService).answerWithContext(anyString(), context.capture());
+        assertThat(context.getValue()).isEqualTo("The Pro plan costs 1499 rupees per month.");
+        assertThat(answer.sources()).containsExactly("pricing.md");
+    }
+
+    @Test
+    void keepsEveryDocumentWithinTheScoreGapIncludingTheBoundary() {
+        // In doubles 0.77 - 0.2 is 0.5700000000000001, so the boundary needs care
+        properties.getRag().setMaxScoreGap(0.2);
+        service = new DocumentService(vectorStore, chatService, properties);
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                scored("Refunds take five days.", "policy.md", 0.77),
+                scored("Refund requests go to support.", "faq.txt", 0.57),
+                scored("The office has a cafe.", "office.md", 0.56)));
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("Five days.");
+
+        DocumentService.Answer answer = service.ask("How do refunds work?");
+
+        assertThat(answer.sources()).containsExactly("policy.md", "faq.txt");
+    }
+
+    @Test
+    void scoreGapOfOneKeepsEveryMatch() {
+        properties.getRag().setMaxScoreGap(1.0);
+        service = new DocumentService(vectorStore, chatService, properties);
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                scored("The Pro plan costs 1499 rupees per month.", "pricing.md", 0.724),
+                scored("Returns are accepted within 17 days.", "handbook.pdf", 0.382)));
+        when(chatService.answerWithContext(anyString(), anyString())).thenReturn("1499 rupees per month.");
+
+        assertThat(service.ask("How much is the Pro plan?").sources()).containsExactly("pricing.md", "handbook.pdf");
+    }
+
+    @Test
+    void keepsMatchesThatHaveNoScore() {
+        assertThat(DocumentService.closeToBestMatch(List.of(
+                        scored("a", "a.md", 0.9),
+                        new Document("b", Map.of(DocumentService.SOURCE_KEY, "b.md")),
+                        scored("c", "c.md", 0.1)), 0.15))
+                .extracting(Document::getText)
+                .containsExactly("a", "b");
+    }
+
+    private static Document scored(String text, String source, double score) {
+        return Document.builder().text(text).metadata(Map.of(DocumentService.SOURCE_KEY, source)).score(score).build();
+    }
+
+    @Test
     void usesConfiguredTopKAndSimilarityThreshold() {
         properties.getRag().setTopK(7);
         properties.getRag().setSimilarityThreshold(0.65);

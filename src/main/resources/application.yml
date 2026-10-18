@@ -12,6 +12,7 @@ starter-kit:
   rag:
     top-k: ${RAG_TOP_K:4}
     similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.0}
+    max-score-gap: ${RAG_MAX_SCORE_GAP:0.15}
     chunk-size: ${RAG_CHUNK_SIZE:800}
 
 spring:
@@ -22,7 +23,7 @@ spring:
       max-file-size: ${MAX_UPLOAD_SIZE:20MB}
       max-request-size: ${MAX_UPLOAD_SIZE:20MB}
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/starterkit}
+    url: ${DB_URL:jdbc:postgresql://localhost:${DB_PORT:5432}/starterkit}
     username: ${DB_USER:starterkit}
     password: ${DB_PASSWORD:starterkit}
   ai:
@@ -49,7 +50,7 @@ spring:
         options:
           model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
     ollama:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      base-url: ${OLLAMA_BASE_URL:http://localhost:${OLLAMA_PORT:11434}}
       init:
         pull-model-strategy: when_missing
       chat:

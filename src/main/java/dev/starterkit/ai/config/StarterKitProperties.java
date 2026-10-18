@@ -126,6 +126,14 @@ public class StarterKitProperties {
         @DecimalMax("1.0")
         private double similarityThreshold = 0.0;
 
+        /**
+         * Keep only chunks scoring within this distance of the best match, so a document that is
+         * not about the question is neither sent to the model nor cited. 1 keeps every match.
+         */
+        @DecimalMin("0.0")
+        @DecimalMax("1.0")
+        private double maxScoreGap = 0.15;
+
         /** Target chunk size in tokens when splitting documents. */
         @Min(100)
         @Max(4000)
@@ -145,6 +153,14 @@ public class StarterKitProperties {
 
         public void setSimilarityThreshold(double similarityThreshold) {
             this.similarityThreshold = similarityThreshold;
+        }
+
+        public double getMaxScoreGap() {
+            return maxScoreGap;
+        }
+
+        public void setMaxScoreGap(double maxScoreGap) {
+            this.maxScoreGap = maxScoreGap;
         }
 
         public int getChunkSize() {

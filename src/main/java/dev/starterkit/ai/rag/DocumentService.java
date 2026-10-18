@@ -5,6 +5,7 @@ import dev.starterkit.ai.config.StarterKitProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -113,11 +114,34 @@ public class DocumentService {
         if (matches == null || matches.isEmpty()) {
             return new Answer(NO_DOCUMENTS_ANSWER, List.of());
         }
+        matches = closeToBestMatch(matches, rag.getMaxScoreGap());
         String context = matches.stream().map(Document::getText).collect(Collectors.joining("\n---\n"));
         List<String> sources = List.copyOf(matches.stream()
                 .map(d -> String.valueOf(d.getMetadata().getOrDefault(SOURCE_KEY, "unknown")))
                 .collect(Collectors.toCollection(LinkedHashSet::new)));
         return new Answer(chatService.answerWithContext(question, context), sources);
+    }
+
+    /**
+     * Top-K search always returns K chunks, even when only one document is about the question.
+     * Chunks scoring far below the best match are mostly noise: they dilute the context and get
+     * cited as sources. Keep the ones within maxGap of the best score. Absolute scores differ a lot
+     * between embedding models; the gap to the best match is far more stable. Chunks without a
+     * score are kept.
+     */
+    static List<Document> closeToBestMatch(List<Document> matches, double maxGap) {
+        double best = matches.stream()
+                .map(Document::getScore)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .max()
+                .orElse(Double.NaN);
+        if (Double.isNaN(best)) {
+            return matches;
+        }
+        // The epsilon keeps a chunk exactly maxGap below the best despite floating point (0.77 - 0.2 > 0.57)
+        double cutoff = best - maxGap - 1e-9;
+        return matches.stream().filter(d -> d.getScore() == null || d.getScore() >= cutoff).toList();
     }
 
     /**

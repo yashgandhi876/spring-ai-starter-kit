@@ -19,7 +19,7 @@ class ConnectionFailureAnalyzerTest {
         FailureAnalysis analysis = analyzer.analyze(failure);
 
         assertThat(analysis.getDescription()).isEqualTo(ConnectionFailureAnalyzer.OLLAMA_DESCRIPTION);
-        assertThat(analysis.getAction()).contains("docker compose up -d", "AI_PROVIDER=anthropic", "OLLAMA_BASE_URL");
+        assertThat(analysis.getAction()).contains("docker compose up -d", "AI_PROVIDER=anthropic", "OLLAMA_PORT", "OLLAMA_BASE_URL");
     }
 
     @Test
@@ -31,7 +31,7 @@ class ConnectionFailureAnalyzerTest {
         FailureAnalysis analysis = analyzer.analyze(failure);
 
         assertThat(analysis.getDescription()).isEqualTo(ConnectionFailureAnalyzer.DATABASE_DESCRIPTION);
-        assertThat(analysis.getAction()).contains("DB_URL");
+        assertThat(analysis.getAction()).contains("docker compose up -d", "DB_PORT", "DB_URL");
     }
 
     @Test

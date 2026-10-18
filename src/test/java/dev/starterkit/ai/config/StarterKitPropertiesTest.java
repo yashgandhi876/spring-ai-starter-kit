@@ -22,6 +22,7 @@ class StarterKitPropertiesTest {
             assertThat(ctx).hasNotFailed();
             StarterKitProperties p = ctx.getBean(StarterKitProperties.class);
             assertThat(p.getRag().getTopK()).isEqualTo(4);
+            assertThat(p.getRag().getMaxScoreGap()).isEqualTo(0.15);
             assertThat(p.getPrompts().getRag()).contains("{context}", "{question}");
         });
     }
@@ -34,6 +35,7 @@ class StarterKitPropertiesTest {
                         "starter-kit.prompts.system=You are Acme's support bot.",
                         "starter-kit.rag.top-k=8",
                         "starter-kit.rag.similarity-threshold=0.5",
+                        "starter-kit.rag.max-score-gap=0.3",
                         "starter-kit.rag.chunk-size=500")
                 .run(ctx -> {
                     StarterKitProperties p = ctx.getBean(StarterKitProperties.class);
@@ -42,6 +44,7 @@ class StarterKitPropertiesTest {
                     assertThat(p.getPrompts().getSystem()).isEqualTo("You are Acme's support bot.");
                     assertThat(p.getRag().getTopK()).isEqualTo(8);
                     assertThat(p.getRag().getSimilarityThreshold()).isEqualTo(0.5);
+                    assertThat(p.getRag().getMaxScoreGap()).isEqualTo(0.3);
                     assertThat(p.getRag().getChunkSize()).isEqualTo(500);
                 });
     }
@@ -70,5 +73,15 @@ class StarterKitPropertiesTest {
     void rejectsSimilarityThresholdAboveOne() {
         runner.withPropertyValues("starter-kit.rag.similarity-threshold=1.5")
                 .run(ctx -> assertThat(ctx).hasFailed());
+    }
+
+    @Test
+    void rejectsMaxScoreGapOutOfRange() {
+        runner.withPropertyValues("starter-kit.rag.max-score-gap=-0.1")
+                .run(ctx -> assertThat(ctx).hasFailed()
+                        .getFailure().rootCause().hasMessageContaining("maxScoreGap"));
+        runner.withPropertyValues("starter-kit.rag.max-score-gap=1.5")
+                .run(ctx -> assertThat(ctx).hasFailed()
+                        .getFailure().rootCause().hasMessageContaining("maxScoreGap"));
     }
 }

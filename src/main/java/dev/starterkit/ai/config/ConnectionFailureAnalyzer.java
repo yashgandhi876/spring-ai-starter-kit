@@ -15,10 +15,11 @@ public class ConnectionFailureAnalyzer extends AbstractFailureAnalyzer<ConnectEx
             Start it with 'docker compose up -d' (or install it from https://ollama.com), then run the app again.
             Using Claude or OpenAI instead? Set AI_PROVIDER=anthropic or AI_PROVIDER=openai with its API key.
             Anthropic has no embeddings API, so also set EMBEDDING_PROVIDER=openai, or keep Ollama running for embeddings.
-            Ollama on another machine or port? Set OLLAMA_BASE_URL.""";
+            Compose Ollama on another port? Set OLLAMA_PORT. Ollama on another machine? Set OLLAMA_BASE_URL.""";
     static final String DATABASE_DESCRIPTION = "Could not reach the Postgres database.";
     static final String DATABASE_ACTION = """
             Start it with 'docker compose up -d', then run the app again.
+            Compose Postgres on another port (because 5432 was taken)? Set the same DB_PORT for the app.
             Using your own database? Set DB_URL, DB_USER and DB_PASSWORD. It needs the pgvector extension.""";
 
     @Override

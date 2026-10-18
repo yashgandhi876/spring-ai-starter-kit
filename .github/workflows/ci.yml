@@ -17,6 +17,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build and test
         run: ./gradlew build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test the chat page's Markdown renderer
+        run: node --test 'src/test/js/*.test.mjs'
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4

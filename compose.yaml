@@ -1,6 +1,9 @@
 # Local stack: Postgres with pgvector and Ollama.
 #   docker compose up -d                 starts Postgres and Ollama; run the app with ./gradlew bootRun
 #   docker compose --profile app up -d   also builds and runs the app itself on http://localhost:8080
+# Needs Docker Compose 2.24 or newer (check with: docker compose version).
+# Port 5432 or 11434 already taken on your machine? Set DB_PORT or OLLAMA_PORT in .env or your shell;
+# ./gradlew bootRun reads the same variables.
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -9,7 +12,7 @@ services:
       POSTGRES_USER: starterkit
       POSTGRES_PASSWORD: starterkit
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +24,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama:/root/.ollama
 

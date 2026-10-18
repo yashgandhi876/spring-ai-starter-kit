@@ -22,7 +22,8 @@ and switch between Claude, OpenAI and a free local model by changing one setting
 
 ## Quick start (local, no API key)
 
-Needs Java 21 (check with `java -version`) and Docker.
+Needs Java 21 (check with `java -version`) and Docker with Compose 2.24 or newer
+(check with `docker compose version`; update Docker Desktop if it is older).
 
 ```bash
 git clone https://github.com/yashgandhi876/spring-ai-starter-kit.git
@@ -35,6 +36,15 @@ Open http://localhost:8080. The first start downloads the Ollama models
 (`llama3.2` and `nomic-embed-text`, about 2.3 GB), so the first answer can take a few minutes.
 
 Prefer to run everything in Docker? `docker compose --profile app up -d --build`.
+
+**Port already in use?** If you already run Postgres (port 5432) or Ollama (port 11434) on your machine,
+pick other host ports. Compose and the app both read them:
+
+```bash
+export DB_PORT=5433
+docker compose up -d
+./gradlew bootRun
+```
 
 ## Use Claude or OpenAI
 
@@ -72,12 +82,15 @@ for Docker Compose, or export the variables before `./gradlew bootRun`.
 | `AI_SYSTEM_PROMPT` | a helpful-assistant prompt | Instructions sent with every chat |
 | `RAG_TOP_K` | `4` | How many document chunks are sent with each question (1 to 20) |
 | `RAG_SIMILARITY_THRESHOLD` | `0.0` | Drop chunks less similar than this (0 to 1) |
+| `RAG_MAX_SCORE_GAP` | `0.15` | Keep only chunks scoring within this distance of the best match, so documents that aren't about the question are not cited; `1` keeps all |
 | `RAG_CHUNK_SIZE` | `800` | Chunk size in tokens when splitting documents (100 to 4000) |
 | `MAX_UPLOAD_SIZE` | `20MB` | Largest file that can be uploaded |
 | `APP_NAME` | `Spring AI Starter Kit` | Name shown on the chat page |
 | `APP_WELCOME_MESSAGE` | a short greeting | First message on the chat page |
 | `APP_ACCENT_COLOR` | `#2f6f4f` | Button and highlight colour, as `#rrggbb` |
-| `DB_URL`, `DB_USER`, `DB_PASSWORD` | local Compose database | Postgres connection |
+| `DB_PORT` / `OLLAMA_PORT` | `5432` / `11434` | Host ports for the Compose Postgres and Ollama containers; the app follows them |
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | local Compose database | Postgres connection (`DB_URL` overrides `DB_PORT`) |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server (overrides `OLLAMA_PORT`) |
 
 Invalid values (for example `RAG_TOP_K=0` or a colour that isn't `#rrggbb`) stop the app at
 startup with a message naming the setting, instead of failing later.
@@ -142,6 +155,7 @@ src/main/resources/
 
 ```bash
 ./gradlew test
+node --test 'src/test/js/*.test.mjs'   # the chat page's Markdown renderer; needs Node 22+
 ```
 
 The tests need no API keys, network or Docker.
