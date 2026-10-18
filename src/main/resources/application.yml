@@ -37,8 +37,9 @@ spring:
       chat:
         options:
           model: ${ANTHROPIC_MODEL:claude-sonnet-5-5}
-          temperature: ${AI_TEMPERATURE:0.3}
-          max-tokens: ${AI_MAX_TOKENS:1024}
+          # No temperature: current Claude models (Sonnet 5.5, Opus 5.5) reject it with HTTP 400.
+          # Claude thinks before answering and that thinking counts toward max-tokens, so it needs more room.
+          max-tokens: ${ANTHROPIC_MAX_TOKENS:8192}
     openai:
       api-key: ${OPENAI_API_KEY:not-set}
       chat:

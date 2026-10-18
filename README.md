@@ -62,6 +62,10 @@ export OPENAI_API_KEY=sk-...
 ./gradlew bootRun
 ```
 
+If the provider's key is not set, the app stops at startup and names the variable to export.
+If chat answers `502 AI request failed`, the provider rejected the request (for example an invalid
+or revoked key, or an unknown model); the reason is in the server log, never in the response.
+
 Anthropic has no embeddings API, so RAG keeps using Ollama embeddings unless you set
 `EMBEDDING_PROVIDER=openai` and `EMBEDDING_DIMENSIONS=1536`.
 
@@ -75,8 +79,9 @@ for Docker Compose, or export the variables before `./gradlew bootRun`.
 | `AI_PROVIDER` | `ollama` | Chat provider: `ollama`, `anthropic` or `openai` |
 | `EMBEDDING_PROVIDER` | `ollama` | Embedding provider for RAG: `ollama` or `openai` |
 | `EMBEDDING_DIMENSIONS` | `768` | Must match the embedding model (`1536` for OpenAI `text-embedding-3-small`) |
-| `AI_TEMPERATURE` | `0.3` | Higher is more creative, lower is more predictable |
-| `AI_MAX_TOKENS` | `1024` | Longest answer the model may write |
+| `AI_TEMPERATURE` | `0.3` | Higher is more creative, lower is more predictable. Ollama and OpenAI only: current Claude models don't accept it |
+| `AI_MAX_TOKENS` | `1024` | Longest answer the model may write (Ollama and OpenAI) |
+| `ANTHROPIC_MAX_TOKENS` | `8192` | Same for Claude; includes Claude's thinking, so it is higher. A cap, not a cost |
 | `ANTHROPIC_MODEL` / `OPENAI_CHAT_MODEL` / `OLLAMA_CHAT_MODEL` | see `.env.example` | Chat model per provider |
 | `OLLAMA_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_MODEL` | `nomic-embed-text` / `text-embedding-3-small` | Embedding model per provider |
 | `AI_SYSTEM_PROMPT` | a helpful-assistant prompt | Instructions sent with every chat |
