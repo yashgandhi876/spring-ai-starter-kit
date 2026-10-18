@@ -6,11 +6,11 @@ import reactor.core.publisher.Flux;
 public interface ChatService {
 
     /** Returns the full answer in one piece. */
-    String chat(String message);
+    ChatAnswer chat(String message);
 
     /** Streams the answer token by token. */
-    Flux<String> stream(String message);
+    Flux<ChatChunk> stream(String message);
 
     /** Answers a question using only the given context, for RAG. */
-    String answerWithContext(String question, String context);
+    ChatAnswer answerWithContext(String question, String context);
 }

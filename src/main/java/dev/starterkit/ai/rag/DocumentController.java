@@ -1,5 +1,8 @@
 package dev.starterkit.ai.rag;
 
+import dev.starterkit.ai.usage.UsageService;
+import dev.starterkit.ai.usage.UsageSubjects;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -24,12 +27,16 @@ public class DocumentController {
 
     public record AskRequest(@NotBlank @Size(max = 2000) String question) {}
 
+    public record AskResponse(String answer, List<String> sources, UsageService.AnswerUsage usage) {}
+
     private final DocumentService documentService;
     private final DocumentCatalog catalog;
+    private final UsageService usage;
 
-    public DocumentController(DocumentService documentService, DocumentCatalog catalog) {
+    public DocumentController(DocumentService documentService, DocumentCatalog catalog, UsageService usage) {
         this.documentService = documentService;
         this.catalog = catalog;
+        this.usage = usage;
     }
 
     /** Uploads a document. Uploading a file with the same name again replaces the old version. */
@@ -54,7 +61,10 @@ public class DocumentController {
     }
 
     @PostMapping("/ask")
-    public DocumentService.Answer ask(@Valid @RequestBody AskRequest request) {
-        return documentService.ask(request.question());
+    public AskResponse ask(@Valid @RequestBody AskRequest request, HttpServletRequest http) {
+        String subject = UsageSubjects.of(http);
+        usage.reserve(subject);
+        DocumentService.Answer answer = documentService.ask(request.question());
+        return new AskResponse(answer.answer(), answer.sources(), usage.record(subject, answer.tokens()));
     }
 }

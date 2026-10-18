@@ -1,5 +1,12 @@
 package dev.starterkit.ai.rag;
 
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import java.time.Duration;
+import dev.starterkit.ai.usage.UsageService;
+import dev.starterkit.ai.usage.UsageLimitExceededException;
+import dev.starterkit.ai.chat.TokenUsage;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -28,15 +35,17 @@ class DocumentControllerTest {
 
     private DocumentService documentService;
     private DocumentCatalog catalog;
+    private UsageService usage;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         documentService = mock(DocumentService.class);
         catalog = mock(DocumentCatalog.class);
+        usage = mock(UsageService.class);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mvc = MockMvcBuilders.standaloneSetup(new DocumentController(documentService, catalog))
+        mvc = MockMvcBuilders.standaloneSetup(new DocumentController(documentService, catalog, usage))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -89,12 +98,31 @@ class DocumentControllerTest {
     @Test
     void askReturnsAnswerWithSources() throws Exception {
         when(documentService.ask("What is covered?"))
-                .thenReturn(new DocumentService.Answer("Parts and labour.", List.of("warranty.pdf")));
+                .thenReturn(new DocumentService.Answer("Parts and labour.", List.of("warranty.pdf"), new TokenUsage(100, 20)));
+        when(usage.record("ip:127.0.0.1", new TokenUsage(100, 20)))
+                .thenReturn(new UsageService.AnswerUsage(100, 20, 0.0004));
 
         mvc.perform(post("/api/ask").contentType(MediaType.APPLICATION_JSON).content("{\"question\":\"What is covered?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer").value("Parts and labour."))
-                .andExpect(jsonPath("$.sources[0]").value("warranty.pdf"));
+                .andExpect(jsonPath("$.sources[0]").value("warranty.pdf"))
+                .andExpect(jsonPath("$.usage.inputTokens").value(100))
+                .andExpect(jsonPath("$.usage.outputTokens").value(20))
+                .andExpect(jsonPath("$.usage.costUsd").value(0.0004));
+        verify(usage).reserve("ip:127.0.0.1");
+    }
+
+    @Test
+    void askOverTheDailyLimitIsRefusedWithRetryAfterAndNoModelCall() throws Exception {
+        doThrow(new UsageLimitExceededException("You have used all 5 AI requests for today.", Duration.ofMinutes(90)))
+                .when(usage).reserve(anyString());
+
+        mvc.perform(post("/api/ask").contentType(MediaType.APPLICATION_JSON).content("{\"question\":\"What is covered?\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "5400"))
+                .andExpect(jsonPath("$.title").value("Daily limit reached"))
+                .andExpect(jsonPath("$.detail").value("You have used all 5 AI requests for today."));
+        verifyNoInteractions(documentService);
     }
 
     @Test

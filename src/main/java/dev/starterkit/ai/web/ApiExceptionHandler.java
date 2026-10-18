@@ -2,6 +2,8 @@ package dev.starterkit.ai.web;
 
 import dev.starterkit.ai.rag.DocumentService.EmptyDocumentException;
 import dev.starterkit.ai.rag.DocumentService.UnsupportedFileTypeException;
+import dev.starterkit.ai.security.UserAccounts;
+import dev.starterkit.ai.usage.UsageLimitExceededException;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +96,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         log.error("Stream failed", ex);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error",
                 "Something went wrong on the server. Check the server logs for details.");
+    }
+
+    @ExceptionHandler(UserAccounts.InvalidAccountException.class)
+    ProblemDetail invalidAccount(UserAccounts.InvalidAccountException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid user", ex.getMessage());
+    }
+
+    @ExceptionHandler(UserAccounts.AccountExistsException.class)
+    ProblemDetail accountExists(UserAccounts.AccountExistsException ex) {
+        return problem(HttpStatus.CONFLICT, "User already exists", ex.getMessage());
+    }
+
+    /** A daily usage limit is used up. Retry-After says how many seconds until it resets. */
+    @ExceptionHandler(UsageLimitExceededException.class)
+    ResponseEntity<ProblemDetail> usageLimit(UsageLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(Math.max(1, ex.retryAfter().toSeconds())))
+                .body(problem(HttpStatus.TOO_MANY_REQUESTS, "Daily limit reached", ex.getMessage()));
     }
 
     @ExceptionHandler(DataAccessException.class)

@@ -1,6 +1,8 @@
 package dev.starterkit.ai.rag;
 
+import dev.starterkit.ai.chat.ChatAnswer;
 import dev.starterkit.ai.chat.ChatService;
+import dev.starterkit.ai.chat.TokenUsage;
 import dev.starterkit.ai.config.StarterKitProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,7 +34,8 @@ public class DocumentService {
 
     public record IngestResult(String source, int chunks) {}
 
-    public record Answer(String answer, List<String> sources) {}
+    /** A RAG answer, its sources, and the tokens the model used (zero when nothing matched). */
+    public record Answer(String answer, List<String> sources, TokenUsage tokens) {}
 
     /** The file type is not one we can read. */
     public static class UnsupportedFileTypeException extends RuntimeException {
@@ -112,14 +115,15 @@ public class DocumentService {
                 .similarityThreshold(rag.getSimilarityThreshold())
                 .build());
         if (matches == null || matches.isEmpty()) {
-            return new Answer(NO_DOCUMENTS_ANSWER, List.of());
+            return new Answer(NO_DOCUMENTS_ANSWER, List.of(), TokenUsage.NONE);
         }
         matches = closeToBestMatch(matches, rag.getMaxScoreGap());
         String context = matches.stream().map(Document::getText).collect(Collectors.joining("\n---\n"));
         List<String> sources = List.copyOf(matches.stream()
                 .map(d -> String.valueOf(d.getMetadata().getOrDefault(SOURCE_KEY, "unknown")))
                 .collect(Collectors.toCollection(LinkedHashSet::new)));
-        return new Answer(chatService.answerWithContext(question, context), sources);
+        ChatAnswer answer = chatService.answerWithContext(question, context);
+        return new Answer(answer.text(), sources, answer.usage());
     }
 
     /**

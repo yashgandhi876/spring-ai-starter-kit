@@ -1,2 +1,3 @@
 org.springframework.boot.diagnostics.FailureAnalyzer=dev.starterkit.ai.config.ConnectionFailureAnalyzer,\
-  dev.starterkit.ai.config.MissingApiKeyFailureAnalyzer
+  dev.starterkit.ai.config.MissingApiKeyFailureAnalyzer,\
+  dev.starterkit.ai.security.MissingAdminPasswordFailureAnalyzer

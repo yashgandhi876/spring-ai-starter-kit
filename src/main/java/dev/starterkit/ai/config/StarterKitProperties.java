@@ -28,6 +28,12 @@ public class StarterKitProperties {
     @Valid
     private final Rag rag = new Rag();
 
+    @Valid
+    private final Security security = new Security();
+
+    @Valid
+    private final Usage usage = new Usage();
+
     public Branding getBranding() {
         return branding;
     }
@@ -38,6 +44,14 @@ public class StarterKitProperties {
 
     public Rag getRag() {
         return rag;
+    }
+
+    public Security getSecurity() {
+        return security;
+    }
+
+    public Usage getUsage() {
+        return usage;
     }
 
     public static class Branding {
@@ -169,6 +183,100 @@ public class StarterKitProperties {
 
         public void setChunkSize(int chunkSize) {
             this.chunkSize = chunkSize;
+        }
+    }
+
+    /** Login. Off by default so the quick start needs no setup; turn it on before exposing the app. */
+    public static class Security {
+
+        /** When true, every page and API call needs a signed-in user. */
+        private boolean enabled = false;
+
+        /** The first admin, created at startup if no user with this name exists yet. */
+        @jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9._-]{3,50}$",
+                message = "must be 3 to 50 letters, digits, dots, dashes or underscores")
+        private String adminUsername = "admin";
+
+        /** Only used to create the first admin. Required, at least 12 characters, when login is on. */
+        private String adminPassword = "";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getAdminUsername() {
+            return adminUsername;
+        }
+
+        public void setAdminUsername(String adminUsername) {
+            this.adminUsername = adminUsername;
+        }
+
+        public String getAdminPassword() {
+            return adminPassword;
+        }
+
+        public void setAdminPassword(String adminPassword) {
+            this.adminPassword = adminPassword;
+        }
+    }
+
+    /** Per-user (or per-IP when login is off) daily limits, and the prices used for cost tracking. */
+    public static class Usage {
+
+        /** AI requests (chat, stream, ask) allowed per user per day, counted in UTC. 0 means no limit. */
+        @Min(0)
+        private int dailyRequestLimit = 0;
+
+        /** Input plus output tokens allowed per user per day. 0 means no limit. */
+        @Min(0)
+        private long dailyTokenLimit = 0;
+
+        /**
+         * US dollars per million input tokens. Empty uses the built-in price for known models
+         * (see PriceList); set it when you use another model or your price differs.
+         */
+        @DecimalMin("0.0")
+        private Double priceInputPerMtok;
+
+        /** US dollars per million output tokens. Empty uses the built-in price for known models. */
+        @DecimalMin("0.0")
+        private Double priceOutputPerMtok;
+
+        public int getDailyRequestLimit() {
+            return dailyRequestLimit;
+        }
+
+        public void setDailyRequestLimit(int dailyRequestLimit) {
+            this.dailyRequestLimit = dailyRequestLimit;
+        }
+
+        public long getDailyTokenLimit() {
+            return dailyTokenLimit;
+        }
+
+        public void setDailyTokenLimit(long dailyTokenLimit) {
+            this.dailyTokenLimit = dailyTokenLimit;
+        }
+
+        public Double getPriceInputPerMtok() {
+            return priceInputPerMtok;
+        }
+
+        public void setPriceInputPerMtok(Double priceInputPerMtok) {
+            this.priceInputPerMtok = priceInputPerMtok;
+        }
+
+        public Double getPriceOutputPerMtok() {
+            return priceOutputPerMtok;
+        }
+
+        public void setPriceOutputPerMtok(Double priceOutputPerMtok) {
+            this.priceOutputPerMtok = priceOutputPerMtok;
         }
     }
 }
