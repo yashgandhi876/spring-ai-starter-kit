@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spring AI Starter Kit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6f4f'/%3E%3Cpath d='M9 21c2-6 6-10 14-11-1 8-5 12-11 14' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f7f7f5; --panel:#fff; --ink:#1d1d1b; --quiet:#6b6b66; --line:#e2e2dc; --accent:#2f6f4f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161615; --panel:#1f1f1d; --ink:#ededea; --quiet:#a3a39c; --line:#33332f; --accent:#6fbf94; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+  header { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; }
+  .badge { font-size:13px; color:var(--quiet); }
+  .tabs { display:flex; gap:8px; margin:20px 0 12px; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--ink); padding:6px 14px; border-radius:8px; cursor:pointer; font:inherit; }
+  .tabs button[aria-selected="true"] { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  #log { min-height:240px; max-height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:12px; margin-bottom:12px; }
+  .msg { white-space:pre-wrap; padding:10px 12px; border-radius:8px; }
+  .user { background:var(--bg); align-self:flex-end; max-width:85%; }
+  .bot { border:1px solid var(--line); }
+  .sources { font-size:13px; color:var(--quiet); margin-top:6px; }
+  form { display:flex; gap:8px; }
+  input[type=text] { flex:1; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  button.primary { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .upload { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:14px; }
+  .upload input[type=file] { max-width:100%; }
+  .msg { overflow-wrap:anywhere; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="appName">Spring AI Starter Kit</h1>
+    <span class="badge" id="provider"></span>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-mode="chat">Chat</button>
+    <button role="tab" aria-selected="false" data-mode="docs">Ask your documents</button>
+  </div>
+
+  <section class="panel">
+    <div class="upload hidden" id="uploadRow">
+      <input type="file" id="file" accept=".pdf,.txt,.md">
+      <button class="primary" id="uploadBtn" type="button">Upload</button>
+      <span id="uploadStatus" class="badge"></span>
+    </div>
+    <div id="log" aria-live="polite"></div>
+    <form id="form">
+      <input type="text" id="input" placeholder="Ask anything…" autocomplete="off" maxlength="8000" required>
+      <button class="primary" id="send" type="submit">Send</button>
+    </form>
+  </section>
+</main>
+<script>
+  const log = document.getElementById('log');
+  const input = document.getElementById('input');
+  const send = document.getElementById('send');
+  let mode = 'chat';
+
+  fetch('/api/info').then(r => r.json()).then(i => {
+    document.title = i.appName;
+    document.getElementById('appName').textContent = i.appName;
+    document.getElementById('provider').textContent = 'chat: ' + i.chatProvider + ' · embeddings: ' + i.embeddingProvider;
+    // accentColor is validated as #rrggbb on the server, so it is safe to use as a CSS value
+    if (/^#[0-9a-fA-F]{6}$/.test(i.accentColor)) document.documentElement.style.setProperty('--accent', i.accentColor);
+    add('bot', i.welcomeMessage);
+  }).catch(() => add('bot', 'Could not reach the server. Is it running?'));
+
+  async function errorMessage(res) {
+    try {
+      const p = await res.json();
+      return p.detail || p.title || ('HTTP ' + res.status);
+    } catch (_) {
+      return 'HTTP ' + res.status;
+    }
+  }
+
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+    document.getElementById('uploadRow').classList.toggle('hidden', mode !== 'docs');
+    input.placeholder = mode === 'chat' ? 'Ask anything…' : 'Ask a question about your documents…';
+  }));
+
+  function add(cls, text) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + cls;
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+    return d;
+  }
+
+  async function streamChat(message, target) {
+    const res = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ message })
+    });
+    if (!res.ok) throw new Error(await errorMessage(res));
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const event = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const data = event.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5)).join('\n').trim();
+        if (!data) continue;
+        let token;
+        try { token = JSON.parse(data); } catch (_) { continue; }
+        if (token.detail || token.title) throw new Error(token.detail || token.title);
+        target.textContent += token.text || '';
+        log.scrollTop = log.scrollHeight;
+      }
+    }
+  }
+
+  async function askDocs(question, target) {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    if (!res.ok) throw new Error(await errorMessage(res));
+    const a = await res.json();
+    target.textContent = a.answer;
+    if (a.sources && a.sources.length) {
+      const s = document.createElement('div');
+      s.className = 'sources';
+      s.textContent = 'Sources: ' + a.sources.join(', ');
+      target.appendChild(s);
+    }
+  }
+
+  document.getElementById('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    add('user', text);
+    const bot = add('bot', '');
+    send.disabled = true;
+    try {
+      if (mode === 'chat') await streamChat(text, bot); else await askDocs(text, bot);
+    } catch (err) {
+      bot.textContent = (bot.textContent ? bot.textContent + '\n\n' : '') + 'Something went wrong: ' + err.message;
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  });
+
+  document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const f = document.getElementById('file').files[0];
+    const status = document.getElementById('uploadStatus');
+    if (!f) { status.textContent = 'Choose a file first.'; return; }
+    const body = new FormData();
+    body.append('file', f);
+    status.textContent = 'Uploading…';
+    try {
+      const res = await fetch('/api/documents', { method: 'POST', body });
+      if (!res.ok) throw new Error(await errorMessage(res));
+      const r = await res.json();
+      status.textContent = `Added ${r.source} (${r.chunks} ${r.chunks === 1 ? 'chunk' : 'chunks'}).`;
+      document.getElementById('file').value = '';
+    } catch (err) {
+      status.textContent = 'Upload failed: ' + err.message;
+    }
+  });
+</script>
+</body>
+</html>

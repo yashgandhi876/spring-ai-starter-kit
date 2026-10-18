@@ -1,0 +1,82 @@
+# Every setting below can be overridden with an environment variable (shown in ${...}).
+# See .env.example for the full list and the README for what each one does.
+
+starter-kit:
+  branding:
+    app-name: ${APP_NAME:Spring AI Starter Kit}
+    welcome-message: ${APP_WELCOME_MESSAGE:Ask me anything, or upload a document and ask questions about it.}
+    accent-color: "${APP_ACCENT_COLOR:#2f6f4f}"
+  prompts:
+    # Override in a profile or an external application.yml for multi-line prompts.
+    system: ${AI_SYSTEM_PROMPT:You are a helpful assistant inside a Spring Boot application. Answer clearly and concisely. If you do not know something, say so.}
+  rag:
+    top-k: ${RAG_TOP_K:4}
+    similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.0}
+    chunk-size: ${RAG_CHUNK_SIZE:800}
+
+spring:
+  application:
+    name: spring-ai-starter-kit
+  servlet:
+    multipart:
+      max-file-size: ${MAX_UPLOAD_SIZE:20MB}
+      max-request-size: ${MAX_UPLOAD_SIZE:20MB}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/starterkit}
+    username: ${DB_USER:starterkit}
+    password: ${DB_PASSWORD:starterkit}
+  ai:
+    model:
+      # Which provider answers chat: ollama (free, local), anthropic (Claude) or openai
+      chat: ${AI_PROVIDER:ollama}
+      # Which provider creates embeddings for RAG: ollama or openai (Anthropic has no embedding API)
+      embedding: ${EMBEDDING_PROVIDER:ollama}
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-5-5}
+          temperature: ${AI_TEMPERATURE:0.3}
+          max-tokens: ${AI_MAX_TOKENS:1024}
+    openai:
+      api-key: ${OPENAI_API_KEY:not-set}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: ${AI_TEMPERATURE:0.3}
+          max-tokens: ${AI_MAX_TOKENS:1024}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      init:
+        pull-model-strategy: when_missing
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:llama3.2}
+          temperature: ${AI_TEMPERATURE:0.3}
+          num-predict: ${AI_MAX_TOKENS:1024}
+      embedding:
+        options:
+          model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        # 768 matches nomic-embed-text (Ollama); 1536 matches OpenAI text-embedding-3-small
+        dimensions: ${EMBEDDING_DIMENSIONS:768}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  shutdown: graceful
