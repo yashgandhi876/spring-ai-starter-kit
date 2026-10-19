@@ -36,7 +36,7 @@ and switch between Claude, OpenAI and a free local model by changing one setting
 
 - You want a no-code chatbot builder. This is a Java codebase you change and run yourself.
 - Your stack is not Java or Spring.
-- You need multi-agent workflows or tool calling. Those are not in v0.1.
+- You need tool calling, MCP or PII guardrails. Those are in [Pro](#pro-edition), not in this free kit.
 
 ## Quick start (local, no API key)
 
@@ -250,10 +250,24 @@ node --test 'src/test/js/*.test.mjs'   # the chat page's Markdown renderer; need
 The tests need no API keys or Docker. Database tests run on a real Postgres that Gradle downloads
 once as a regular dependency and starts in-process.
 
+## Pro edition
+
+[Spring AI Starter Kit Pro](https://spring-ai-starter-kit-claim.spring-ai-starter-kit-claim.workers.dev) is
+this kit plus:
+
+- **Agent with tools**: searches your documents, does exact arithmetic and checks dates by calling tools, and
+  shows which tools it used. Runaway tool loops are capped.
+- **MCP server**: your knowledge base becomes tools for Claude Code, Claude Desktop and Cursor.
+- **MCP client**: plug in other MCP servers; their tools appear next to yours.
+- **Guardrails**: emails, phone numbers, cards, Aadhaar, PAN and IP addresses are masked before anything reaches
+  the AI provider, in chat, RAG and tool results. Or block such requests, and block terms you choose.
+
+It's Java source in a private GitHub repository: $129 per developer for unlimited projects and 12 months of
+updates, with a 14-day refund. This free kit stays MIT-licensed and keeps getting fixes.
+
 ## Roadmap
 
-- Tool-calling agents and an MCP server
-- Guardrails (PII masking) and an evaluation test suite
+- An evaluation test suite
 
 Ideas and bug reports are welcome in Issues.
 
