@@ -252,7 +252,7 @@ once as a regular dependency and starts in-process.
 
 ## Pro edition
 
-[Spring AI Starter Kit Pro](https://spring-ai-starter-kit-claim.spring-ai-starter-kit-claim.workers.dev) is
+[Spring AI Starter Kit Pro](https://springaikit.yashgandhi876.workers.dev) is
 this kit plus:
 
 - **Agent with tools**: searches your documents, does exact arithmetic and checks dates by calling tools, and
